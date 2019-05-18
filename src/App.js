@@ -1,4 +1,5 @@
 import React, { Component } from 'react';
+import AsiaMap from './AsiaMap';
 import WorldMap from './WorldMap';
 
 class App extends Component {

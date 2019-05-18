@@ -1,98 +1,166 @@
 import React, { Component } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import mapDataAsia from './mapDataAsia';
+import mapDataWorld from './mapDataWorld';
+import axios from 'axios';
 
 // Load Highcharts modules
 require('highcharts/modules/map')(Highcharts);
 
-var data = [
-    ['ae', 37],
-    ['af', 44],
-    ['am', 20],
-    ['az', 19],
-    ['bd', 9],
-    ['bh', 12],
-    ['bn', 43],
-    ['bt', 26],
-    ['cn', 70],
-    ['cnm', 33],
-    ['cy', 48],
-    ['ge', 27],
-    ['id', 65],
-    ['il', 29],
-    ['in', 65],
-    ['iq', 36],
-    ['ir', 70],
-    ['jk', 40],
-    ['jo', 31],
-    ['jp', 100],
-    ['kg', 52],
-    ['kh', 25],
-    ['kp', 45],
-    ['kr', 70],
-    ['kw', 35],
-    ['kz', 28],
-    ['la', 38],
-    ['lb', 46],
-    ['lk', 51],
-    ['mm', 13],
-    ['mn', 34],
-    ['my', 18],
-    ['nc', 47],
-    ['np', 50],
-    ['om', 5],
-    ['ph', 1],
-    ['pk', 39],
-    ['qa', 41],
-    ['ru', 70],
-    ['sa', 2],
-    ['sg', 65],
-    ['sh', 17],
-    ['sp', 10],
-    ['sy', 30],
-    ['th', 4],
-    ['tj', 22],
-    ['tl', 24],
-    ['tm', 32],
-    ['tr', 65],
-    ['tw', 49],
-    ['uz', 23],
-    ['vn', 21],
-    ['ye', 6]
-  ];
-
-  const mapOptions = {
+const mapOptions = {
     title: {
       text: ''
     },
-    colorAxis: {
-      min: 0,
-      stops: [[0.4, '#ffff00'], [0.65, '#bfff00'], [1, '	#40ff00']]
-    },
-
     series: [
-      {
-        mapData: mapDataAsia,
-        name: 'Asia',
-        data: data
-      }
-    ]
+        {
+            mapData: mapDataWorld,
+            name: 'Basemap',
+            borderColor: '#A0A0A0',
+            nullColor: 'rgba(200, 200, 200, 0.3)',
+            showInLegend: false
+        },
+        {
+            type: 'mappoint',
+            name: 'Meteorite',
+            color: Highcharts.getOptions().colors[3],
+            showInLegend: false,
+            tooltip: {
+                pointFormat: '<b>Mass: {point.mass}</b><br>' +
+                    'Lat: {point.lat}<br>' +
+                    'Lon: {point.lon}<br>'
+            },
+            data: [{name: "Nogata", mass: 472, lat: 33.725, lon: 130.75}]
+        }
+      ]
   };
 
-  // Render app with demo chart
-  class WorldMap extends Component {
+// Render with world map
+class WorldMap extends Component {
+
+    constructor() {
+        super();
+        this.state = {
+            mapOptions: {
+                title: {
+                  text: ''
+                },
+                mapNavigation: {
+                    enabled: true,
+                    buttonOptions: {
+                        verticalAlign: 'bottom'
+                    }
+                },
+                series: [
+                    {
+                        mapData: mapDataWorld,
+                        name: 'Basemap',
+                        borderColor: '#A0A0A0',
+                        nullColor: 'rgba(200, 200, 200, 0.3)',
+                        showInLegend: false
+                    }
+                ]
+              },
+            dataSequence: [],
+            dataIdx: 0,
+            year: ''
+        }
+    }
+
+    afterChartCreated = chart => {
+        this.internalChart = chart;
+    }
+      
+    componentDidMount() {
+        // example of use
+        this.createDataSequence();
+    }
+
+    testSetState = () => {
+        const newIdx = this.state.dataIdx + 1;
+        this.internalChart.series[1].remove();
+        this.internalChart.addSeries({
+            type: 'mappoint',
+            name: 'Meteorite',
+            color: Highcharts.getOptions().colors[3],
+            showInLegend: false,
+            tooltip: {
+                pointFormat: '<b>{point.name}</b><br>' +
+                    '<b>Mass: {point.mass}</b><br>' +
+                    'Lat: {point.lat}<br>' +
+                    'Lon: {point.lon}<br>'
+            },
+            data: [...this.state.dataSequence[newIdx].data],
+            style: {
+                fontSize: '15px'
+            }
+        })
+        this.setState({dataIdx: newIdx, year: this.state.dataSequence[newIdx].name})
+    }
+
+    play = (funcToPlay) => {
+        this.internalChart.sequenceTimer = setInterval(function () {
+            funcToPlay();
+        }, 600);
+
+    }
+
+    createDataSequence = () => {
+        Promise.all([
+            axios.get('/api/meteorites/years'),
+            axios.get('/api/meteorites')
+        ])
+            .then(values => {
+                const years = values[0].data;
+                const meteorites = values[1].data;
+                const dataSequence = years.reduce((acc, item) => {
+                    acc.push({name: item.year.substring(0, 4), data: []});
+                    return acc;
+                }, [])
+                meteorites.forEach(item => {
+                    for (let i = 0; i < dataSequence.length; i++) {
+                        if (dataSequence[i].name === item.year.substring(0, 4)) {
+                            dataSequence[i].data.push({
+                                name: item.name,
+                                mass: item.mass,
+                                lat: item.recLat,
+                                lon: item.recLong
+                            })
+                            break;
+                        }
+                    }
+                })
+                this.setState({ dataSequence, year: dataSequence[0].name })
+                console.log(dataSequence)
+                this.internalChart.addSeries({
+                    type: 'mappoint',
+                    name: 'Meteorite',
+                    color: Highcharts.getOptions().colors[3],
+                    showInLegend: false,
+                    tooltip: {
+                        pointFormat: '<b>{point.name}</b><br>' +
+                            '<b>Mass: {point.mass}</b><br>' +
+                            'Lat: {point.lat}<br>' +
+                            'Lon: {point.lon}<br>'
+                    },
+                    data: [dataSequence[0].data[0]]
+                })
+            })
+    }
+
     render() {
-      return (
+        return (
         <div>
-          <HighchartsReact
-            options={mapOptions}
+            <h3>Year:  {this.state.year}</h3>
+            <HighchartsReact
+            options={this.state.mapOptions}
             constructorType={'mapChart'}
             highcharts={Highcharts}
-          />
+            callback={ this.afterChartCreated }
+            />
+            <button type="button" onClick={() => this.play(this.testSetState)}>Play</button>
         </div>
-      );
+        );
     }
-  }
+}
 
 export default WorldMap;
